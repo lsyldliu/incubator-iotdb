@@ -34,8 +34,8 @@ statement
     | DELETE STORAGE GROUP fullPath (COMMA fullPath)* #deleteStorageGroup
     | SHOW METADATA #showMetadata // not support yet
     | DESCRIBE prefixPath #describePath // not support yet
-    | CREATE INDEX ON fullPath USING function=ID indexWithClause? whereClause? #createIndex //not support yet
-    | DROP INDEX function=ID ON fullPath #dropIndex //not support yet
+    | CREATE INDEX ON fullPath USING function=ID #createIndex // indexWithClause? whereClause?
+    | DROP INDEX function=ID ON fullPath #dropIndex
     | MERGE #merge
     | FLUSH prefixPath? (COMMA prefixPath)* (booleanClause)?#flush
     | FULL MERGE #fullMerge

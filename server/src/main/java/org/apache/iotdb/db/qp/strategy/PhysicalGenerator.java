@@ -38,6 +38,7 @@ import org.apache.iotdb.db.qp.logical.Operator.OperatorType;
 import org.apache.iotdb.db.qp.logical.crud.BasicFunctionOperator;
 import org.apache.iotdb.db.qp.logical.crud.DeleteDataOperator;
 import org.apache.iotdb.db.qp.logical.crud.FilterOperator;
+import org.apache.iotdb.db.qp.logical.crud.IndexOperator;
 import org.apache.iotdb.db.qp.logical.crud.InsertOperator;
 import org.apache.iotdb.db.qp.logical.crud.QueryOperator;
 import org.apache.iotdb.db.qp.logical.sys.AlterTimeSeriesOperator;
@@ -69,6 +70,7 @@ import org.apache.iotdb.db.qp.physical.crud.DeletePlan;
 import org.apache.iotdb.db.qp.physical.crud.FillQueryPlan;
 import org.apache.iotdb.db.qp.physical.crud.GroupByTimeFillPlan;
 import org.apache.iotdb.db.qp.physical.crud.GroupByTimePlan;
+import org.apache.iotdb.db.qp.physical.crud.IndexPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertPlan;
 import org.apache.iotdb.db.qp.physical.crud.LastQueryPlan;
 import org.apache.iotdb.db.qp.physical.crud.QueryPlan;
@@ -206,6 +208,10 @@ public class PhysicalGenerator {
                 String.format(
                     "not supported operator type %s in ttl operation.", operator.getType()));
         }
+      case INDEX:
+        IndexOperator indexOperator = (IndexOperator) operator;
+        return new IndexPlan(indexOperator.getPath(),
+            indexOperator.getIndexOperatorType(), indexOperator.getIndexType());
       case LOAD_CONFIGURATION:
         LoadConfigurationOperatorType type = ((LoadConfigurationOperator) operator)
             .getLoadConfigurationOperatorType();

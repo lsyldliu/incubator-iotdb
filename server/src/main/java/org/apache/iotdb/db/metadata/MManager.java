@@ -18,6 +18,31 @@
  */
 package org.apache.iotdb.db.metadata;
 
+import static java.util.stream.Collectors.toList;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.iotdb.db.conf.IoTDBConfig;
 import org.apache.iotdb.db.conf.IoTDBConstant;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
@@ -26,7 +51,13 @@ import org.apache.iotdb.db.conf.adapter.IoTDBConfigDynamicAdapter;
 import org.apache.iotdb.db.engine.StorageEngine;
 import org.apache.iotdb.db.engine.fileSystem.SystemFileFactory;
 import org.apache.iotdb.db.exception.ConfigAdjusterException;
-import org.apache.iotdb.db.exception.metadata.*;
+import org.apache.iotdb.db.exception.metadata.DeleteFailedException;
+import org.apache.iotdb.db.exception.metadata.IllegalPathException;
+import org.apache.iotdb.db.exception.metadata.MetadataException;
+import org.apache.iotdb.db.exception.metadata.PathNotExistException;
+import org.apache.iotdb.db.exception.metadata.StorageGroupAlreadySetException;
+import org.apache.iotdb.db.exception.metadata.StorageGroupNotSetException;
+import org.apache.iotdb.db.index.IndexManager.IndexType;
 import org.apache.iotdb.db.metadata.mnode.MNode;
 import org.apache.iotdb.db.metadata.mnode.MeasurementMNode;
 import org.apache.iotdb.db.metadata.mnode.StorageGroupMNode;
@@ -54,20 +85,6 @@ import org.apache.iotdb.tsfile.utils.Pair;
 import org.apache.iotdb.tsfile.write.schema.MeasurementSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import static java.util.stream.Collectors.toList;
 
 /**
  * This class takes the responsibility of serialization of all the metadata info and persistent it
@@ -1140,7 +1157,7 @@ public class MManager {
    * @return deviceId
    */
   public String getDeviceId(String path) {
-    MNode deviceNode = null;
+    MNode deviceNode;
     try {
       deviceNode = getDeviceNode(path);
       path = deviceNode.getFullPath();
@@ -1667,6 +1684,48 @@ public class MManager {
   }
 
   /**
+   * Check whether the timeseries has index
+   */
+  public boolean checkIndex(String path, IndexType indexType) throws MetadataException {
+    lock.readLock().lock();
+    try {
+      return mtree.getSchema(path).isIndexed(indexType.toString());
+    } finally {
+      lock.readLock().unlock();
+    }
+  }
+
+  /**
+   * Create index for timeseries
+   */
+  public void addIndex(String path, IndexType indexType) throws MetadataException, IOException {
+    lock.writeLock().lock();
+    try {
+      mtree.getSchema(path).setIndex(indexType.toString(), true);
+      if (!isRecovering) {
+        logWriter.addIndex(path, indexType.toString());
+      }
+    } finally {
+      lock.writeLock().unlock();
+    }
+  }
+
+  /**
+   * Drop index for one timeseries
+   */
+  public void dropIndex(String path, IndexType indexType) throws MetadataException, IOException {
+    lock.writeLock().lock();
+    try {
+      mtree.getSchema(path).setIndex(indexType.toString(), false);
+      if (!isRecovering) {
+        logWriter.dropIndex(path, indexType.toString());
+      }
+    } finally {
+      lock.writeLock().unlock();
+    }
+  }
+
+  /**
    * Check whether the given path contains a storage group
    */
   boolean checkStorageGroupByPath(String path) {
@@ -1828,15 +1887,10 @@ public class MManager {
   }
 
   /**
-   * get schema for device.
-   * Attention!!!  Only support insertPlan and insertTabletsPlan
-   * @param deviceId
-   * @param measurementList
-   * @param plan
-   * @return
-   * @throws MetadataException
+   * get schema for device. Attention!!!  Only support insertPlan and insertTabletsPlan
    */
-  public MeasurementSchema[] getSeriesSchemas(String deviceId, String[] measurementList, PhysicalPlan plan) throws MetadataException {
+  public MeasurementSchema[] getSeriesSchemas(String deviceId, String[] measurementList,
+      PhysicalPlan plan) throws MetadataException {
     MeasurementSchema[] schemas = new MeasurementSchema[measurementList.length];
 
     MNode deviceNode = null;
@@ -1851,7 +1905,8 @@ public class MManager {
           // could not create it
           if (!config.isAutoCreateSchemaEnabled()) {
             throw new MetadataException(String.format(
-              "Current deviceId[%s] does not contain measurement:%s", deviceId, measurementList[i]));
+                "Current deviceId[%s] does not contain measurement:%s", deviceId,
+                measurementList[i]));
           }
 
           // create it
@@ -1859,19 +1914,20 @@ public class MManager {
           TSDataType dataType = getTypeInLoc(plan, i);
 
           createTimeseries(
-            path.getFullPath(),
-            dataType,
-            getDefaultEncoding(dataType),
-            TSFileDescriptor.getInstance().getConfig().getCompressor(),
-            Collections.emptyMap());
+              path.getFullPath(),
+              dataType,
+              getDefaultEncoding(dataType),
+              TSFileDescriptor.getInstance().getConfig().getCompressor(),
+              Collections.emptyMap());
         }
 
-        MeasurementMNode measurementNode = (MeasurementMNode) getChild(deviceNode, measurementList[i]);
+        MeasurementMNode measurementNode = (MeasurementMNode) getChild(deviceNode,
+            measurementList[i]);
 
         // check type is match
         TSDataType insertDataType = null;
         if (plan instanceof InsertPlan) {
-          if (!((InsertPlan)plan).isNeedInferType()) {
+          if (!((InsertPlan) plan).isNeedInferType()) {
             // only when InsertPlan's values is object[], we should check type
             insertDataType = getTypeInLoc(plan, i);
           } else {
@@ -1883,11 +1939,11 @@ public class MManager {
 
         if (measurementNode.getSchema().getType() != insertDataType) {
           logger.warn("DataType mismatch, Insert measurement {} type {}, metadata tree type {}",
-            measurementList[i], insertDataType, measurementNode.getSchema().getType());
+              measurementList[i], insertDataType, measurementNode.getSchema().getType());
           if (!config.isEnablePartialInsert()) {
             throw new MetadataException(String.format(
-              "DataType mismatch, Insert measurement %s type %s, metadata tree type %s",
-              measurementList[i], insertDataType, measurementNode.getSchema().getType()));
+                "DataType mismatch, Insert measurement %s type %s, metadata tree type %s",
+                measurementList[i], insertDataType, measurementNode.getSchema().getType()));
           } else {
             // mark failed measurement
             if (plan instanceof InsertTabletPlan) {
@@ -1910,7 +1966,7 @@ public class MManager {
         }
       } catch (MetadataException e) {
         logger.warn("meet error when check {}.{}, message: {}", deviceId, measurementList[i],
-          e.getMessage());
+            e.getMessage());
         if (config.isEnablePartialInsert()) {
           // mark failed measurement
           if (plan instanceof InsertPlan) {
@@ -1926,13 +1982,14 @@ public class MManager {
     return schemas;
   }
 
-  private void changeStringValueToRealType(InsertPlan plan, int loc, TSDataType type) throws MetadataException {
+  private void changeStringValueToRealType(InsertPlan plan, int loc, TSDataType type)
+      throws MetadataException {
     plan.getTypes()[loc] = type;
     try {
       switch (type) {
         case INT32:
           plan.getValues()[loc] =
-            Integer.parseInt(String.valueOf(plan.getValues()[loc]));
+              Integer.parseInt(String.valueOf(plan.getValues()[loc]));
           break;
         case INT64:
           plan.getValues()[loc] =
@@ -1956,7 +2013,8 @@ public class MManager {
           break;
       }
     } catch (ClassCastException e) {
-      logger.error("inconsistent type between client and server for " + e.getMessage() + " " + type);
+      logger
+          .error("inconsistent type between client and server for " + e.getMessage() + " " + type);
       throw new MetadataException(e.getMessage());
     } catch (NumberFormatException e) {
       logger.error("inconsistent type between type {} and value {}", type, plan.getValues()[loc]);
@@ -1984,49 +2042,43 @@ public class MManager {
         return conf.getDefaultTextEncoding();
       default:
         throw new UnSupportedDataTypeException(
-          String.format("Data type %s is not supported.", dataType.toString()));
+            String.format("Data type %s is not supported.", dataType.toString()));
     }
   }
 
   /**
-   * get dataType of plan, in loc measurements
-   * only support InsertPlan and InsertTabletPlan
-   * @param plan
-   * @param loc
-   * @return
-   * @throws MetadataException
+   * get dataType of plan, in loc measurements only support InsertPlan and InsertTabletPlan
    */
   private TSDataType getTypeInLoc(PhysicalPlan plan, int loc) throws MetadataException {
     TSDataType dataType;
     if (plan instanceof InsertPlan) {
       InsertPlan tPlan = (InsertPlan) plan;
-      dataType = TypeInferenceUtils.getPredictedDataType(tPlan.getValues()[loc], tPlan.isNeedInferType());
+      dataType = TypeInferenceUtils
+          .getPredictedDataType(tPlan.getValues()[loc], tPlan.isNeedInferType());
     } else if (plan instanceof InsertTabletPlan) {
       dataType = ((InsertTabletPlan) plan).getDataTypes()[loc];
-    }  else {
+    } else {
       throw new MetadataException(String.format(
-        "Only support insert and insertTablet, plan is [%s]", plan.getOperatorType()));
+          "Only support insert and insertTablet, plan is [%s]", plan.getOperatorType()));
     }
     return dataType;
   }
 
   /**
-   * when insert, we lock device node for not create deleted time series
-   * before insert, we should call this function to lock the device node
-   * @param deviceId
+   * when insert, we lock device node for not create deleted time series before insert, we should
+   * call this function to lock the device node
    */
   public void lockInsert(String deviceId) throws MetadataException {
     getDeviceNodeWithAutoCreateAndReadLock(deviceId);
   }
 
   /**
-   * when insert, we lock device node for not create deleted time series
-   * after insert, we should call this function to unlock the device node
-   * @param deviceId
+   * when insert, we lock device node for not create deleted time series after insert, we should
+   * call this function to unlock the device node
    */
   public void unlockInsert(String deviceId) {
     try {
-      MNode mNode =getDeviceNode(deviceId);
+      MNode mNode = getDeviceNode(deviceId);
       mNode.readUnlock();
     } catch (MetadataException e) {
       // ignore the exception

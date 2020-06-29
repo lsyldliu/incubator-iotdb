@@ -118,6 +118,16 @@ public class MLogWriter {
     newLine();
   }
 
+  public void addIndex(String path, String indexType) throws IOException {
+    writer.write(String.format("%s,%s,%s", MetadataOperationType.ADD_INDEX, path, indexType));
+    newLine();
+  }
+
+  public void dropIndex(String path, String indexType) throws IOException {
+    writer.write(String.format("%s,%s,%s", MetadataOperationType.DROP_INDEX, path, indexType));
+    newLine();
+  }
+
   public static void upgradeMLog(String schemaDir, String logFileName) throws IOException {
     File logFile = SystemFileFactory.INSTANCE.getFile(schemaDir + File.separator + logFileName);
     File tmpLogFile = SystemFileFactory.INSTANCE.getFile(logFile.getAbsolutePath() + ".tmp");
