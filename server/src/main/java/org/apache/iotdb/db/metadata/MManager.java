@@ -18,6 +18,31 @@
  */
 package org.apache.iotdb.db.metadata;
 
+import static java.util.stream.Collectors.toList;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.iotdb.db.conf.IoTDBConfig;
 import org.apache.iotdb.db.conf.IoTDBConstant;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
@@ -1863,13 +1888,7 @@ public class MManager {
   }
 
   /**
-   * get schema for device.
-   * Attention!!!  Only support insertPlan
-   * @param deviceId
-   * @param measurementList
-   * @param plan
-   * @return
-   * @throws MetadataException
+   * get schema for device. Attention!!!  Only support insertPlan
    */
   public MeasurementSchema[] getSeriesSchemas(String deviceId, String[] measurementList,
       PhysicalPlan plan) throws MetadataException {
@@ -1909,7 +1928,7 @@ public class MManager {
         // check type is match
         TSDataType insertDataType = null;
         if (plan instanceof InsertRowPlan) {
-          if (!((InsertRowPlan)plan).isNeedInferType()) {
+          if (!((InsertRowPlan) plan).isNeedInferType()) {
             // only when InsertRowPlan's values is object[], we should check type
             insertDataType = getTypeInLoc(plan, i);
           } else {
@@ -1928,7 +1947,7 @@ public class MManager {
                 measurementList[i], insertDataType, measurementNode.getSchema().getType()));
           } else {
             // mark failed measurement
-            if( plan instanceof InsertPlan){
+            if (plan instanceof InsertPlan) {
               ((InsertPlan) plan).markFailedMeasurementInsertion(i);
             }
             continue;
@@ -1937,7 +1956,8 @@ public class MManager {
 
         // maybe need to convert value type to the true type
         if ((plan instanceof InsertRowPlan) && ((InsertRowPlan) plan).isNeedInferType()) {
-          changeStringValueToRealType((InsertRowPlan) plan, i, measurementNode.getSchema().getType());
+          changeStringValueToRealType((InsertRowPlan) plan, i,
+              measurementNode.getSchema().getType());
         }
 
         schemas[i] = measurementNode.getSchema();
@@ -1960,13 +1980,14 @@ public class MManager {
     return schemas;
   }
 
-  private void changeStringValueToRealType(InsertRowPlan plan, int loc, TSDataType type) throws MetadataException {
+  private void changeStringValueToRealType(InsertRowPlan plan, int loc, TSDataType type)
+      throws MetadataException {
     plan.getDataTypes()[loc] = type;
     try {
       switch (type) {
         case INT32:
           plan.getValues()[loc] =
-            Integer.parseInt(String.valueOf(plan.getValues()[loc]));
+              Integer.parseInt(String.valueOf(plan.getValues()[loc]));
           break;
         case INT64:
           plan.getValues()[loc] =
@@ -2024,40 +2045,34 @@ public class MManager {
   }
 
   /**
-   * get dataType of plan, in loc measurements
-   * only support InsertRowPlan and InsertTabletPlan
-   * @param plan
-   * @param loc
-   * @return
-   * @throws MetadataException
+   * get dataType of plan, in loc measurements only support InsertRowPlan and InsertTabletPlan
    */
   private TSDataType getTypeInLoc(PhysicalPlan plan, int loc) throws MetadataException {
     TSDataType dataType;
     if (plan instanceof InsertRowPlan) {
       InsertRowPlan tPlan = (InsertRowPlan) plan;
-      dataType = TypeInferenceUtils.getPredictedDataType(tPlan.getValues()[loc], tPlan.isNeedInferType());
+      dataType = TypeInferenceUtils
+          .getPredictedDataType(tPlan.getValues()[loc], tPlan.isNeedInferType());
     } else if (plan instanceof InsertTabletPlan) {
       dataType = ((InsertTabletPlan) plan).getDataTypes()[loc];
-    }  else {
+    } else {
       throw new MetadataException(String.format(
-        "Only support insert and insertTablet, plan is [%s]", plan.getOperatorType()));
+          "Only support insert and insertTablet, plan is [%s]", plan.getOperatorType()));
     }
     return dataType;
   }
 
   /**
-   * when insert, we lock device node for not create deleted time series
-   * before insert, we should call this function to lock the device node
-   * @param deviceId
+   * when insert, we lock device node for not create deleted time series before insert, we should
+   * call this function to lock the device node
    */
   public void lockInsert(String deviceId) throws MetadataException {
     getDeviceNodeWithAutoCreateAndReadLock(deviceId);
   }
 
   /**
-   * when insert, we lock device node for not create deleted time series
-   * after insert, we should call this function to unlock the device node
-   * @param deviceId
+   * when insert, we lock device node for not create deleted time series after insert, we should
+   * call this function to unlock the device node
    */
   public void unlockInsert(String deviceId) {
     try {

@@ -102,6 +102,7 @@ import org.apache.iotdb.db.qp.physical.crud.GroupByTimeFillPlan;
 import org.apache.iotdb.db.qp.physical.crud.GroupByTimePlan;
 import org.apache.iotdb.db.qp.physical.crud.IndexPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertPlan;
+import org.apache.iotdb.db.qp.physical.crud.InsertRowPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertTabletPlan;
 import org.apache.iotdb.db.qp.physical.crud.LastQueryPlan;
 import org.apache.iotdb.db.qp.physical.crud.QueryPlan;
@@ -151,12 +152,9 @@ import org.apache.iotdb.tsfile.utils.Binary;
 import org.apache.iotdb.tsfile.utils.Pair;
 import org.apache.iotdb.tsfile.write.schema.MeasurementSchema;
 import org.apache.iotdb.tsfile.write.writer.RestorableTsFileIOWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class PlanExecutor implements IPlanExecutor {
 
-  private static final Logger logger = LoggerFactory.getLogger(PlanExecutor.class);
   // for data query
   protected IQueryRouter queryRouter;
   // for system schema
@@ -272,7 +270,8 @@ public class PlanExecutor implements IPlanExecutor {
             (storageGroupName, partitionId) ->
                 storageGroupName.equals(((DeletePartitionPlan) plan).getStorageGroupName())
                     && p.getPartitionId().contains(partitionId);
-        StorageEngine.getInstance().removePartitions(((DeletePartitionPlan) plan).getStorageGroupName(), filter);
+        StorageEngine.getInstance()
+            .removePartitions(((DeletePartitionPlan) plan).getStorageGroupName(), filter);
         return true;
       case CREATE_SCHEMA_SNAPSHOT:
         operateCreateSnapshot();
