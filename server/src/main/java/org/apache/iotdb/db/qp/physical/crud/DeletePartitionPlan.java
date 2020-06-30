@@ -16,28 +16,36 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.iotdb.db.metadata;
 
-import org.apache.iotdb.db.conf.IoTDBConstant;
+package org.apache.iotdb.db.qp.physical.crud;
 
-public class MetadataConstant {
+import java.util.List;
+import java.util.Set;
+import org.apache.iotdb.db.qp.logical.Operator.OperatorType;
+import org.apache.iotdb.db.qp.physical.PhysicalPlan;
+import org.apache.iotdb.tsfile.read.common.Path;
 
-  private MetadataConstant() {
-    // allowed to do nothing
+public class DeletePartitionPlan extends PhysicalPlan {
+
+  private String storageGroupName;
+  private Set<Long> partitionId;
+
+  public DeletePartitionPlan(String storageGroupName, Set<Long> partitionId) {
+    super(false, OperatorType.DELETE_PARTITION);
+    this.storageGroupName = storageGroupName;
+    this.partitionId = partitionId;
   }
 
-  private static final String MTREE_VERSION = "1";
+  @Override
+  public List<Path> getPaths() {
+    return null;
+  }
 
-  public static final String ROOT = "root";
-  public static final String METADATA_LOG = "mlog.txt";
-  public static final String TAG_LOG = "tlog.txt";
-  public static final String MTREE_SNAPSHOT =
-      "mtree" + IoTDBConstant.FILE_NAME_SEPARATOR + MTREE_VERSION + ".snapshot";
-  public static final String MTREE_SNAPSHOT_TMP =
-      "mtree" + IoTDBConstant.FILE_NAME_SEPARATOR + MTREE_VERSION + ".snapshot.tmp";
+  public String getStorageGroupName() {
+    return storageGroupName;
+  }
 
-
-  public static final short MNODE_TYPE = 0;
-  public static final short STORAGE_GROUP_MNODE_TYPE = 1;
-  public static final short MEASUREMENT_MNODE_TYPE = 2;
+  public Set<Long> getPartitionId() {
+    return partitionId;
+  }
 }
