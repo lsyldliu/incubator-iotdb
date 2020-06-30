@@ -1,11 +1,28 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package org.apache.iotdb.db.index.utils;
 
 import java.math.BigDecimal;
-import java.util.Collection;
 import java.util.Map.Entry;
 import java.util.SortedMap;
 import java.util.Vector;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.iotdb.db.index.FloatDigest;
 
 public class DataDigestUtil {
@@ -18,47 +35,9 @@ public class DataDigestUtil {
   }
 
   public static FloatDigest getDigest(String key, long startTime, long timeWindow,
-      Collection<Object> datas) {
-    float[] floatDatas = ArrayUtils.toPrimitive(datas.toArray(new Float[]{}));
-    return floatDigest(key, startTime, timeWindow, floatDatas);
-  }
-
-  public static FloatDigest getDigest(String key, long startTime, long timeWindow,
       SortedMap<Long, Object> dataPoints) {
     return DataDigestUtil.partFloatDigest(key, startTime, timeWindow,
         dataPoints);
-  }
-
-
-  public static FloatDigest floatDigest(String key, long startTime, long timeWindow,
-      float[] data) {
-    float max = Float.MIN_VALUE;
-    float min = Float.MAX_VALUE;
-    long count = 0;
-    double sum = 0;
-    Vector<Float> container = new Vector<>();
-    for (float aData : data) {
-      if (aData != Float.MAX_VALUE) {
-        if (max < aData) {
-          max = aData;
-        }
-        if (min > aData) {
-          min = aData;
-        }
-        ++count;
-        sum += aData;
-        container.add(aData);
-      }
-    }
-    float avg = (float) (sum / count);
-
-    BigDecimal squareSum = new BigDecimal(0);
-    for (Float float1 : container) {
-      Double squaredif = Math.pow(float1 - avg, 2.0);
-      squareSum = squareSum.add(new BigDecimal(squaredif));
-    }
-    return new FloatDigest(key, startTime, timeWindow, max, min, count, avg,
-        squareSum);
   }
 
   public static FloatDigest partFloatDigest(String key, long startTime, long timeWindow,
@@ -121,5 +100,4 @@ public class DataDigestUtil {
     return new FloatDigest(key, startTime, timeWindow, max, min, count, avg,
         squareSum);
   }
-
 }

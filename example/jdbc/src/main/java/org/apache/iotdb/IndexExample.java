@@ -49,10 +49,10 @@ public class IndexExample {
         Statement statement = connection.createStatement()) {
 //      insertData(statement);
 
-      ResultSet resultSet = statement.executeQuery("SELECT * FROM root WHERE time < 10");
+      ResultSet resultSet = statement.executeQuery("SELECT * FROM root");
       outputResult(resultSet);
 
-      statement.execute("CREATE INDEX on root.vehicle.d0.s0 USING pisa");
+//      statement.execute("CREATE INDEX on root.vehicle.d0.s0 USING pisa");
       statement.execute("DROP INDEX pisa ON root.vehicle.d0.s0");
     }
   }

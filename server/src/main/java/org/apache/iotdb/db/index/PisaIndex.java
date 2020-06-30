@@ -36,10 +36,8 @@ import org.apache.iotdb.db.exception.index.IndexException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
 import org.apache.iotdb.db.index.storage.Config;
-import org.apache.iotdb.db.index.storage.StorageFactory;
-import org.apache.iotdb.db.index.storage.interfaces.IBackendReader;
-import org.apache.iotdb.db.index.storage.interfaces.IBackendWriter;
-import org.apache.iotdb.db.index.storage.model.FixWindowPackage;
+import org.apache.iotdb.db.index.storage.FakeStore;
+import org.apache.iotdb.db.index.storage.FixWindowPackage;
 import org.apache.iotdb.db.index.utils.DataDigestUtil;
 import org.apache.iotdb.db.index.utils.DigestUtil;
 import org.apache.iotdb.db.index.utils.ForestRootStack;
@@ -74,8 +72,8 @@ public class PisaIndex<T extends FloatDigest> {
   private long maxSerialNo = 0;
 
   private ForestRootStack<T> rootNodes;
-  protected IBackendReader reader = StorageFactory.getBackaBackendReader();
-  protected IBackendWriter writer = StorageFactory.getBackaBackendWriter();
+  protected FakeStore reader = new FakeStore();
+  protected FakeStore writer = new FakeStore();
   private String rowkey;
 
   private Pair<Long, Long> currentWindow = new Pair<>(0L, Config.timeWindow);
@@ -305,7 +303,7 @@ public class PisaIndex<T extends FloatDigest> {
       pkg.add(data);
     } else {
       if (!pkg.isEmpty()) {
-        writer.write(rowkey, Config.data_cf, pkg.getStartTime(), pkg);
+        writer.write(rowkey, pkg.getStartTime(), pkg);
       }
 
       // insert middle packages
@@ -321,7 +319,7 @@ public class PisaIndex<T extends FloatDigest> {
 
   public void close() throws Exception {
     if (!pkg.isEmpty()) {
-      writer.write(rowkey, Config.data_cf, pkg.getStartTime(), pkg);
+      writer.write(rowkey, pkg.getStartTime(), pkg);
       FloatDigest digest = pkg.getDigest();
       insert((T) digest);
     }
@@ -391,8 +389,7 @@ public class PisaIndex<T extends FloatDigest> {
     }
     for (T digestNode : digests) {
       //flush all nodes in digests into disk
-      writer.write(rowkey, Config.digest_cf, digestNode.getStartTime(),
-          digestNode);
+      writer.write(rowkey, digestNode.getStartTime(), digestNode);
     }
     return digests.size();
   }

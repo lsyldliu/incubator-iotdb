@@ -1,48 +1,46 @@
-package org.apache.iotdb.db.index.storage.memory;
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.iotdb.db.index.storage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
-import java.util.SortedMap;
 import java.util.TreeMap;
 import org.apache.iotdb.db.index.FloatDigest;
-import org.apache.iotdb.db.index.storage.interfaces.IBackendModelCreator;
-import org.apache.iotdb.db.index.storage.interfaces.IBackendReader;
-import org.apache.iotdb.db.index.storage.interfaces.IBackendWriter;
-import org.apache.iotdb.db.index.storage.model.FixWindowPackage;
-import org.apache.iotdb.tsfile.utils.Pair;
 
 /**
  * this fake store has only one cf and one
  */
-public class FakeStore implements IBackendModelCreator, IBackendWriter, IBackendReader {
+public class FakeStore {
 
-  private Map<String, TreeMap<Long, FixWindowPackage>> data = new HashMap<String, TreeMap<Long, FixWindowPackage>>();
-  private Map<String, TreeMap<Long, FloatDigest>> digests = new HashMap<String, TreeMap<Long, FloatDigest>>();
+  private Map<String, TreeMap<Long, FixWindowPackage>> data = new HashMap<>();
+  private Map<String, TreeMap<Long, FloatDigest>> digests = new HashMap<>();
 
-  @Override
-  public void initialize(String ks, int replicaFactor, List<String> columnfamilies)
-      throws Exception {
-  }
-
-  @Override
-  public void addColumnFamily(String ks, String cf) throws Exception {
-  }
-
-  @Override
-  public void addColumnFamilies(String ks, List<String> cfs) throws Exception {
-  }
-
-  @Override
   public FloatDigest[] getDigests(String key, Long[] timeStamps) {
     List<FloatDigest> list = new ArrayList<>();
     Map<Long, FloatDigest> map = digests.get(key);
     if (map == null || map.size() == 0) {
       return null;
     }
-    FloatDigest pkg = null;
+    FloatDigest pkg;
     for (long time : timeStamps) {
       if ((pkg = map.get(time)) != null) {
         list.add(pkg);
@@ -51,7 +49,6 @@ public class FakeStore implements IBackendModelCreator, IBackendWriter, IBackend
     return list.toArray(new FloatDigest[]{});
   }
 
-  @Override
   public FloatDigest getBeforeOrEqualDigest(String key, long timestamp) {
     TreeMap<Long, FloatDigest> map = digests.get(key);
     if (map == null || map.size() == 0) {
@@ -63,7 +60,6 @@ public class FakeStore implements IBackendModelCreator, IBackendWriter, IBackend
     return map.floorEntry(timestamp).getValue();
   }
 
-  @Override
   public FixWindowPackage getBeforeOrEqualPackage(String key, long timestamp) {
     TreeMap<Long, FixWindowPackage> map = data.get(key);
     if (map == null || map.size() == 0) {
@@ -75,7 +71,6 @@ public class FakeStore implements IBackendModelCreator, IBackendWriter, IBackend
     return map.floorEntry(timestamp).getValue();
   }
 
-  @Override
   public FloatDigest getAfterOrEqualDigest(String key, long timestamp) {
     TreeMap<Long, FloatDigest> map = digests.get(key);
     if (map == null || map.size() == 0) {
@@ -87,9 +82,7 @@ public class FakeStore implements IBackendModelCreator, IBackendWriter, IBackend
     return map.ceilingEntry(timestamp).getValue();
   }
 
-  @Override
   public FloatDigest getLatestDigest(String key) throws Exception {
-    List<Pair<Long, FloatDigest>> list = new ArrayList<>();
     TreeMap<Long, FloatDigest> map = digests.get(key);
     if (map == null || map.size() == 0) {
       return null;
@@ -97,35 +90,16 @@ public class FakeStore implements IBackendModelCreator, IBackendWriter, IBackend
     return map.lastEntry().getValue();
   }
 
-  @Override
-  public void write(String key, String cf, long startTimestamp, FixWindowPackage dp)
+  public void write(String key, long startTimestamp, FixWindowPackage dp)
       throws Exception {
     TreeMap<Long, FixWindowPackage> map = data.computeIfAbsent(key, k -> new TreeMap<>());
     map.put(startTimestamp, dp);
   }
 
-  @Override
-  public void write(String key, String cf, long startTimestamp, FloatDigest digest)
+  public void write(String key, long startTimestamp, FloatDigest digest)
       throws Exception {
     TreeMap<Long, FloatDigest> map = this.digests.computeIfAbsent(key, k -> new TreeMap<>());
     map.put(startTimestamp, digest);
   }
 
-  @Override
-  public void write(String key, String cf, long startTimestamp, byte[] digest) throws Exception {
-    // TODO Auto-generated method stub
-
-  }
-
-  @Override
-  public void addFloatColumnFamily(String ks, String cf) throws Exception {
-    // TODO Auto-generated method stub
-
-  }
-
-  @Override
-  public byte[] getBytes(String key, String cf, long startTime) {
-    // TODO Auto-generated method stub
-    return null;
-  }
 }
