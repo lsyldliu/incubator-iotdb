@@ -196,6 +196,10 @@ public class MManager {
             MTREE_SNAPSHOT_THREAD_CHECK_TIME, TimeUnit.SECONDS);
   }
 
+  /**
+   * we should not use this function in other place, but only in IoTDB class
+   * @return
+   */
   public static MManager getInstance() {
     return MManagerHolder.INSTANCE;
   }
