@@ -20,8 +20,8 @@ package org.apache.iotdb.db.index;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,8 +37,6 @@ import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
 import org.apache.iotdb.db.index.storage.Config;
 import org.apache.iotdb.db.index.storage.FakeStore;
-import org.apache.iotdb.db.index.storage.FixWindowPackage;
-import org.apache.iotdb.db.index.utils.DataDigestUtil;
 import org.apache.iotdb.db.index.utils.DigestUtil;
 import org.apache.iotdb.db.index.utils.ForestRootStack;
 import org.apache.iotdb.db.query.context.QueryContext;
@@ -77,11 +75,6 @@ public class PisaIndex<T extends FloatDigest> {
   private String rowkey;
 
   private Pair<Long, Long> currentWindow = new Pair<>(0L, Config.timeWindow);
-  private FixWindowPackage pkg;
-
-
-  private FixWindowPackage leftPackage;
-  private FixWindowPackage rightPackage;
 
   private static final String INDEX_FILE_PATH =
       IoTDBDescriptor.getInstance().getConfig().getDataDirs()[0] + File.separator
@@ -94,7 +87,6 @@ public class PisaIndex<T extends FloatDigest> {
   public boolean build(Path path) throws IndexException {
     // TODO initial
     this.rowkey = path.toString();
-    pkg = new FixWindowPackage(rowkey, currentWindow);
 
     T lastDigest = getLastDigest();
 
@@ -161,63 +153,65 @@ public class PisaIndex<T extends FloatDigest> {
       // TODO store PISA
       File f = FSFactoryProducer.getFSFactory().getFile(INDEX_FILE_PATH);
       if (f.exists()) {
-        f.delete();
+        Files.delete(f.toPath());
       }
-      TsFileWriter tsFileWriter = new TsFileWriter(f);
-      tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "min"),
-          new MeasurementSchema("max", dataType, TSEncoding.RLE));
-      tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "max"),
-          new MeasurementSchema("max", dataType, TSEncoding.RLE));
-      tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "first"),
-          new MeasurementSchema("first", dataType, TSEncoding.RLE));
-      tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "last"),
-          new MeasurementSchema("last", dataType, TSEncoding.RLE));
-      tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "sum"),
-          new MeasurementSchema("sum", TSDataType.DOUBLE, TSEncoding.RLE));
+      try (TsFileWriter tsFileWriter = new TsFileWriter(f)) {
+        tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "min"),
+            new MeasurementSchema("max", dataType, TSEncoding.RLE));
+        tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "max"),
+            new MeasurementSchema("max", dataType, TSEncoding.RLE));
+        tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "first"),
+            new MeasurementSchema("first", dataType, TSEncoding.RLE));
+        tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "last"),
+            new MeasurementSchema("last", dataType, TSEncoding.RLE));
+        tsFileWriter.registerTimeseries(new Path(path.getFullPath(), "sum"),
+            new MeasurementSchema("sum", TSDataType.DOUBLE, TSEncoding.RLE));
 
-      for (int i = 0; i < 10000; i++) {
-        for (PisaIndexNode node : indexNodeSet) {
-          TSRecord tsRecord = new TSRecord(node.getNodeNumber(), path.getFullPath() + i);
-          tsRecord.addTuple(DataPoint
-              .getDataPoint(dataType, "min", String.valueOf(node.getStatistics().getMinValue())));
-          tsRecord.addTuple(DataPoint
-              .getDataPoint(dataType, "max", String.valueOf(node.getStatistics().getMaxValue())));
-          tsRecord.addTuple(DataPoint
-              .getDataPoint(dataType, "first",
-                  String.valueOf(node.getStatistics().getFirstValue())));
-          tsRecord.addTuple(DataPoint
-              .getDataPoint(dataType, "last", String.valueOf(node.getStatistics().getLastValue())));
-          tsRecord.addTuple(DataPoint
-              .getDataPoint(TSDataType.DOUBLE, "sum",
-                  String.valueOf(node.getStatistics().getSumValue())));
+        for (int i = 0; i < 10000; i++) {
+          for (PisaIndexNode node : indexNodeSet) {
+            TSRecord tsRecord = new TSRecord(node.getNodeNumber(), path.getFullPath() + i);
+            tsRecord.addTuple(DataPoint
+                .getDataPoint(dataType, "min", String.valueOf(node.getStatistics().getMinValue())));
+            tsRecord.addTuple(DataPoint
+                .getDataPoint(dataType, "max", String.valueOf(node.getStatistics().getMaxValue())));
+            tsRecord.addTuple(DataPoint
+                .getDataPoint(dataType, "first",
+                    String.valueOf(node.getStatistics().getFirstValue())));
+            tsRecord.addTuple(DataPoint
+                .getDataPoint(dataType, "last",
+                    String.valueOf(node.getStatistics().getLastValue())));
+            tsRecord.addTuple(DataPoint
+                .getDataPoint(TSDataType.DOUBLE, "sum",
+                    String.valueOf(node.getStatistics().getSumValue())));
 
-          // write TSRecord
-          tsFileWriter.write(tsRecord);
+            // write TSRecord
+            tsFileWriter.write(tsRecord);
+          }
         }
       }
-      tsFileWriter.close();
 
       // TODO for experiment
       // create reader and get the readTsFile interface
       Path sumPath = new Path(path + "0.sum");
-      TsFileSequenceReader reader = new TsFileSequenceReader(INDEX_FILE_PATH);
-      ReadOnlyTsFile readTsFile = new ReadOnlyTsFile(reader);
+      try (ReadOnlyTsFile readTsFile = new ReadOnlyTsFile(
+          new TsFileSequenceReader(INDEX_FILE_PATH))) {
+        long startTime = System.nanoTime();
+        Set<Long> queryNodes = getQueryNodes(1, 26);
+        GlobalTimeExpression expression = new GlobalTimeExpression(
+            TimeFilter.in(queryNodes, false));
 
-      long startTime = System.nanoTime();
-      Set<Long> queryNodes = getQueryNodes(1, 26);
-      GlobalTimeExpression expression = new GlobalTimeExpression(TimeFilter.in(queryNodes, false));
+        List<Path> paths = new ArrayList<>();
+        paths.add(sumPath);
+        QueryExpression queryExpression = QueryExpression.create(paths, expression);
+        QueryDataSet queryDataSet = readTsFile.query(queryExpression);
+        double sum = 0.0;
+        while (queryDataSet.hasNext()) {
+          sum += queryDataSet.next().getFields().get(0).getDoubleV();
+        }
 
-      List<Path> paths = new ArrayList<>();
-      paths.add(sumPath);
-      QueryExpression queryExpression = QueryExpression.create(paths, expression);
-      QueryDataSet queryDataSet = readTsFile.query(queryExpression);
-      double sum = 0.0;
-      while (queryDataSet.hasNext()) {
-        sum += queryDataSet.next().getFields().get(0).getDoubleV();
+        logger.info("queryNodes: {}, sum: {}, cost time: {}", queryNodes, sum,
+            (System.nanoTime() - startTime) / 100000);
       }
-
-      logger.info("queryNodes: {}, sum: {}, cost time: {}", queryNodes, sum,
-          (System.nanoTime() - startTime) / 100000);
     } catch (MetadataException | StorageEngineException | IOException | WriteProcessException | QueryProcessException e) {
       throw new IndexException(e);
     }
@@ -295,34 +289,6 @@ public class PisaIndex<T extends FloatDigest> {
       logger.error(String.format("Read lastest digest error : (%s)", rowkey));
     }
     return lastDigest;
-  }
-
-
-  public void insertPoint(Pair<Long, Float> data) throws Exception {
-    if (pkg.cover(data.left)) {
-      pkg.add(data);
-    } else {
-      if (!pkg.isEmpty()) {
-        writer.write(rowkey, pkg.getStartTime(), pkg);
-      }
-
-      // insert middle packages
-      while (data.left >= currentWindow.right) {
-        FloatDigest digest = pkg.getDigest();
-        insert((T) digest);
-        currentWindow = new Pair<>(currentWindow.right, currentWindow.right + Config.timeWindow);
-        pkg = new FixWindowPackage(rowkey, currentWindow);
-      }
-      pkg.add(data);
-    }
-  }
-
-  public void close() throws Exception {
-    if (!pkg.isEmpty()) {
-      writer.write(rowkey, pkg.getStartTime(), pkg);
-      FloatDigest digest = pkg.getDigest();
-      insert((T) digest);
-    }
   }
 
   protected ForestRootStack<T> getRoots(T digest) {
@@ -414,180 +380,6 @@ public class PisaIndex<T extends FloatDigest> {
   }
 
   public void clean() {
-    this.leftPackage = null;
-    this.rightPackage = null;
-  }
-
-  /**
-   * return how many nodes we will read
-   */
-  public int queryPlan(Pair<Long, Long> range) {
-    leftPackage = reader.getBeforeOrEqualPackage(rowkey, range.left);
-    rightPackage = reader.getBeforeOrEqualPackage(rowkey, range.right);
-    // No packages.
-    // xxx xxx left xxx right xxx xxx
-    if (leftPackage == null && rightPackage == null) {
-      return 0;
-    }
-
-    // 1 packages.
-    // xxx xxx left ... right xxx xxx
-    else if (leftPackage != null && rightPackage != null
-        && leftPackage.getStartTime() == rightPackage.getStartTime()) {
-      return 1;
-    }
-    List<T> digests = new ArrayList<>();
-
-    // query left bound package.
-    long leftStartTime = leftPackage.getStartTime();
-    T leftDigest = (T) leftPackage
-        .getDigest(range.left, leftStartTime + leftPackage.getTimeWindow());
-    if (null != leftDigest) {
-      digests.add(leftDigest);
-    }
-
-    // query right bound package.
-    long rightStartTime = rightPackage.getStartTime();
-    T rightDigest = (T) rightPackage.getDigest(rightStartTime, range.right);
-    if (null != rightDigest) {
-      digests.add(rightDigest);
-    }
-
-    T leftAfterDigest = (T) reader.getAfterOrEqualDigest(rowkey, leftStartTime + 1);
-    T rightBeforeDigest = (T) reader.getBeforeOrEqualDigest(rowkey, rightStartTime - 1);
-
-    long downSerial = leftAfterDigest.getSerial();
-    long upSerial = rightBeforeDigest.getSerial();
-
-    if (downSerial > upSerial) {
-      return digests.size();
-    }
-
-    logger.debug("Query range(Serial Number) : " + downSerial + "-" + upSerial);
-    Pair<Long, Long> bounds = new Pair<>(downSerial, upSerial);
-    if (downSerial % 2 == 0) {
-      digests.add(leftAfterDigest);
-      bounds.left = bounds.left + 1;
-    }
-    if (upSerial % 2 == 1) {
-      digests.add(rightBeforeDigest);
-      bounds.right = bounds.right - 1;
-    }
-    if (bounds.left < bounds.right) {
-      T[] parentArray = queryBetween(bounds);
-      List<T> parentNodes = Arrays.asList(parentArray);
-      digests.addAll(parentNodes);
-    }
-    return digests.size();
-  }
-
-  public T query(Pair<Long, Long> range) {
-    if (leftPackage == null) {
-      leftPackage = reader.getBeforeOrEqualPackage(rowkey, range.left);
-    }
-    if (rightPackage == null) {
-      rightPackage = reader.getBeforeOrEqualPackage(rowkey, range.right);
-    }
-
-    // No packages.
-    // xxx xxx left xxx right xxx xxx
-    if (leftPackage == null && rightPackage == null) {
-      return null;
-    }
-
-    // 1 packages.
-    // xxx xxx left ... right xxx xxx
-    else if (leftPackage != null && rightPackage != null
-        && leftPackage.getStartTime() == rightPackage.getStartTime()) {
-      return (T) leftPackage.getDigest(range.left, range.right);
-    }
-
-    List<T> digests = new ArrayList<>();
-
-    // query left bound package.
-    long leftStartTime = leftPackage.getStartTime();
-    T leftDigest = (T) leftPackage
-        .getDigest(range.left, leftStartTime + leftPackage.getTimeWindow());
-    if (null != leftDigest) {
-      digests.add(leftDigest);
-    }
-
-    // query right bound package.
-    long rightStartTime = rightPackage.getStartTime();
-    T rightDigest = (T) rightPackage.getDigest(rightStartTime, range.right);
-    if (null != rightDigest) {
-      digests.add(rightDigest);
-    }
-
-    long time = System.currentTimeMillis();
-    T leftAfterDigest = (T) reader.getAfterOrEqualDigest(rowkey, leftStartTime + 1);
-    T rightBeforeDigest = (T) reader.getBeforeOrEqualDigest(rowkey, rightStartTime - 1);
-    System.out.println("this step time cost:" + (System.currentTimeMillis() - time));
-    long downSerial = leftAfterDigest.getSerial();
-    long upSerial = rightBeforeDigest.getSerial();
-
-    if (downSerial > upSerial) {
-      return (T) DataDigestUtil.aggregate(rowkey, range.left,
-          (digests.toArray(new FloatDigest[]{})));
-    }
-
-    System.out.println("Query range(Serial Number) : " + downSerial + "-" + upSerial);
-    Pair<Long, Long> bounds = new Pair<>(downSerial, upSerial);
-    if (downSerial % 2 == 0) {
-      digests.add(leftAfterDigest);
-      bounds.left = bounds.left + 1;
-    }
-    if (upSerial % 2 == 1) {
-      digests.add(rightBeforeDigest);
-      bounds.right = bounds.right - 1;
-    }
-    if (bounds.left < bounds.right) {
-      T[] parentArray = queryBetween(bounds);
-      List<T> parentNodes = Arrays.asList(parentArray);
-      digests.addAll(parentNodes);
-    }
-
-    T result = (T) DataDigestUtil.aggregate(rowkey, range.left,
-        (digests.toArray(new FloatDigest[]{})));
-    this.clean();
-    return result;
-  }
-
-  public T[] queryBetween(Pair<Long, Long> range) {
-    long lowerSerial = range.left; // leftLeafNumber
-    long upperSerial = range.right; // rightLeafNumber
-
-    long upperCode = DigestUtil.serialToCode(upperSerial); // rightNodeNumber
-    long parentCode = DigestUtil.getRootCodeBySerialNum(upperSerial); // rootNodeNumber
-    long leftCode = DigestUtil.getLeftestCode(parentCode, upperCode); // leftestNodeNumber
-    long leftSerial = DigestUtil.codeToSerial(leftCode); // leftestLeafNumber
-
-    List<Long> parentCodes = new ArrayList<>();
-    while (leftSerial != lowerSerial) {
-      if (leftSerial > lowerSerial) {
-        parentCodes.add(-parentCode);
-        upperSerial = leftSerial - 1;
-        upperCode = DigestUtil.serialToCode(upperSerial);
-        parentCode = DigestUtil.getRootCodeBySerialNum(upperSerial);
-      } else {
-        --parentCode;
-      }
-      leftCode = DigestUtil.getLeftestCode(parentCode, upperCode);
-      leftSerial = DigestUtil.codeToSerial(leftCode);
-    }
-
-    /*
-     * 将负的 code number 当做时间戳加到 candidate set 中
-     */
-    parentCodes.add(-parentCode);
-    Long[] codeArray = parentCodes.toArray(new Long[0]);
-
-    long start = System.currentTimeMillis();
-    System.out.println("query nodes size: " + codeArray.length);
-    T[] parentDigests = (T[]) reader.getDigests(rowkey, codeArray);
-    System.out.println(System.currentTimeMillis() - start);
-
-    return parentDigests;
   }
 
   private Set<Long> getQueryNodes(long leftLeafNumber, long rightLeafNumber) {

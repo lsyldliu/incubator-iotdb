@@ -19,10 +19,7 @@
 
 package org.apache.iotdb.db.index.storage;
 
-import java.util.SortedMap;
 import java.util.TreeMap;
-import org.apache.iotdb.db.index.FloatDigest;
-import org.apache.iotdb.db.index.utils.DataDigestUtil;
 import org.apache.iotdb.tsfile.utils.Pair;
 
 public class FixWindowPackage {
@@ -69,58 +66,8 @@ public class FixWindowPackage {
     return treeMap.size();
   }
 
-  public long getTimeWindow() {
-    return timeWindow.right - timeWindow.left;
-  }
-
   public TreeMap<Long, Object> getData() {
     return treeMap;
-  }
-
-  public FloatDigest getDigest(long startTime, long endTime) {
-    Pair<Long, Long> regularRange = FixWindowPackage
-        .rangeRegular(startTime, endTime, timeWindow.left, timeWindow.right);
-    long actStartTime = regularRange.left;
-    long actEndTime = regularRange.right;
-
-    SortedMap<Long, Object> dataPoints = treeMap.subMap(actStartTime, actEndTime + 1);
-    if (dataPoints.size() < 1) {
-      return new FloatDigest(true);
-    }
-
-    return DataDigestUtil.getDigest(key, timeWindow.left, getTimeWindow(), dataPoints);
-  }
-
-  public static Pair<Long, Long> rangeRegular(long queryStartTime, long queryEndTime,
-      long startTime, long endTime) {
-    long actStartTime = queryStartTime;
-    long actEndTime = queryEndTime;
-
-    if (queryStartTime > endTime) {
-      actStartTime = endTime;
-      actEndTime = endTime;
-    } else if (queryEndTime < startTime) {
-      actStartTime = startTime;
-      actEndTime = startTime;
-    } else {
-      if (queryStartTime == -1 || queryStartTime < startTime) {
-        actStartTime = startTime;
-      }
-      if (queryEndTime == -1 || queryEndTime > endTime) {
-        actEndTime = endTime;
-      }
-
-      if (actEndTime < actStartTime) {
-        actEndTime = actStartTime;
-      }
-    }
-
-    return new Pair<>(actStartTime, actEndTime);
-  }
-
-
-  public FloatDigest getDigest() {
-    return getDigest(timeWindow.left, timeWindow.right);
   }
 
   @Override

@@ -28,7 +28,7 @@ import java.sql.Statement;
 
 public class IndexExample {
 
-  public static String[] create_sql = new String[]{"SET STORAGE GROUP TO root.vehicle",
+  protected static String[] create_sql = new String[]{"SET STORAGE GROUP TO root.vehicle",
       "CREATE TIMESERIES root.vehicle.d0.s0 WITH DATATYPE=INT32, ENCODING=RLE",
       "CREATE TIMESERIES root.vehicle.d0.s1 WITH DATATYPE=INT64, ENCODING=RLE",
       "CREATE TIMESERIES root.vehicle.d0.s2 WITH DATATYPE=FLOAT, ENCODING=RLE",

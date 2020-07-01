@@ -38,7 +38,7 @@ public class FloatDigest {
   private float min = 0;
   private float avg = 0;
   private long count = 0;
-  private BigDecimal squareSum = new BigDecimal(0.0);
+  private BigDecimal squareSum =  BigDecimal.valueOf(0.0);
   private boolean isEmpty = false;
 
   public void setEmpty(boolean empty) {
