@@ -18,6 +18,10 @@
  */
 package org.apache.iotdb.db.utils;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.metadata.PathAlreadyExistException;
 import org.apache.iotdb.db.qp.constant.SQLConstant;
@@ -29,11 +33,6 @@ import org.apache.iotdb.tsfile.read.common.Path;
 import org.apache.iotdb.tsfile.write.schema.MeasurementSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 
 public class SchemaUtils {
 
@@ -70,7 +69,7 @@ public class SchemaUtils {
   }
 
   public static TSDataType getSeriesTypeByPath(Path path) throws MetadataException {
-    return MManager.getInstance().getSeriesType(path.getFullPath());
+    return IoTDB.metaManager.getSeriesType(path.getFullPath());
   }
 
   /**
