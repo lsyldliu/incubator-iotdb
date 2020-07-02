@@ -34,7 +34,7 @@ public class IndexContractExample {
     try (Connection connection = DriverManager
         .getConnection("jdbc:iotdb://127.0.0.1:6667/", "root", "root");
         Statement statement = connection.createStatement()) {
-//      insertData(statement);
+      insertData(statement);
 
       long startTime = System.nanoTime();
       ResultSet resultSet = statement.executeQuery("SELECT sum(*) FROM root WHERE time < 365000");

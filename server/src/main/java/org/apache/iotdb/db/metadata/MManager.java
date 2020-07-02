@@ -198,7 +198,6 @@ public class MManager {
 
   /**
    * we should not use this function in other place, but only in IoTDB class
-   * @return
    */
   public static MManager getInstance() {
     return MManagerHolder.INSTANCE;
@@ -2015,8 +2014,7 @@ public class MManager {
           break;
       }
     } catch (ClassCastException e) {
-      logger
-          .error("inconsistent type between client and server for " + e.getMessage() + " " + type);
+      logger.error("inconsistent type {} between client and server for {}", type, e.getMessage());
       throw new MetadataException(e.getMessage());
     } catch (NumberFormatException e) {
       logger.error("inconsistent type between type {} and value {}", type, plan.getValues()[loc]);

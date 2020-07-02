@@ -18,10 +18,10 @@
  */
 package org.apache.iotdb.db.exception.index;
 
-import org.apache.iotdb.db.exception.query.QueryProcessException;
+import org.apache.iotdb.db.exception.IoTDBException;
 import org.apache.iotdb.rpc.TSStatusCode;
 
-public class IndexException extends QueryProcessException {
+public class IndexException extends IoTDBException {
 
 
   private static final long serialVersionUID = 2585920847533339136L;

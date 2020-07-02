@@ -18,26 +18,12 @@
  */
 package org.apache.iotdb;
 
-import static org.apache.iotdb.JDBCExample.outputResult;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 public class IndexExample {
-
-  protected static String[] create_sql = new String[]{"SET STORAGE GROUP TO root.vehicle",
-      "CREATE TIMESERIES root.vehicle.d0.s0 WITH DATATYPE=INT32, ENCODING=RLE",
-      "CREATE TIMESERIES root.vehicle.d0.s1 WITH DATATYPE=INT64, ENCODING=RLE",
-      "CREATE TIMESERIES root.vehicle.d0.s2 WITH DATATYPE=FLOAT, ENCODING=RLE",
-      "CREATE TIMESERIES root.vehicle.d0.s3 WITH DATATYPE=TEXT, ENCODING=PLAIN",
-      "CREATE TIMESERIES root.vehicle.d0.s4 WITH DATATYPE=BOOLEAN, ENCODING=PLAIN",
-      "CREATE TIMESERIES root.vehicle.d0.s5 WITH DATATYPE=DOUBLE, ENCODING=RLE",
-      "CREATE TIMESERIES root.vehicle.d1.s0 WITH DATATYPE=INT32, ENCODING=RLE",
-      "CREATE TIMESERIES root.vehicle.d1.s1 WITH DATATYPE=INT64, ENCODING=RLE",
-  };
 
   private static String[] stringValue = new String[]{"A", "B", "C", "D", "E"};
   private static String[] booleanValue = new String[]{"true", "false"};
@@ -47,13 +33,10 @@ public class IndexExample {
     try (Connection connection = DriverManager
         .getConnection("jdbc:iotdb://127.0.0.1:6667/", "root", "root");
         Statement statement = connection.createStatement()) {
-//      insertData(statement);
+      insertData(statement);
 
-      ResultSet resultSet = statement.executeQuery("SELECT * FROM root");
-      outputResult(resultSet);
-
-//      statement.execute("CREATE INDEX on root.vehicle.d0.s0 USING pisa");
       statement.execute("DROP INDEX pisa ON root.vehicle.d0.s0");
+      statement.execute("CREATE INDEX on root.vehicle.d0.s0 USING pisa");
     }
   }
 

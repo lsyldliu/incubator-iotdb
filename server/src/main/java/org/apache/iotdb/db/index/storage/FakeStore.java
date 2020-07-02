@@ -49,39 +49,6 @@ public class FakeStore {
     return list.toArray(new FloatDigest[]{});
   }
 
-  public FloatDigest getBeforeOrEqualDigest(String key, long timestamp) {
-    TreeMap<Long, FloatDigest> map = digests.get(key);
-    if (map == null || map.size() == 0) {
-      return null;
-    }
-    if (map.floorEntry(timestamp) == null) {
-      return null;
-    }
-    return map.floorEntry(timestamp).getValue();
-  }
-
-  public FixWindowPackage getBeforeOrEqualPackage(String key, long timestamp) {
-    TreeMap<Long, FixWindowPackage> map = data.get(key);
-    if (map == null || map.size() == 0) {
-      return null;
-    }
-    if (map.floorEntry(timestamp) == null) {
-      return null;
-    }
-    return map.floorEntry(timestamp).getValue();
-  }
-
-  public FloatDigest getAfterOrEqualDigest(String key, long timestamp) {
-    TreeMap<Long, FloatDigest> map = digests.get(key);
-    if (map == null || map.size() == 0) {
-      return null;
-    }
-    if (map.ceilingKey(timestamp) == null) {
-      return null;
-    }
-    return map.ceilingEntry(timestamp).getValue();
-  }
-
   public FloatDigest getLatestDigest(String key) throws Exception {
     TreeMap<Long, FloatDigest> map = digests.get(key);
     if (map == null || map.size() == 0) {
@@ -101,5 +68,4 @@ public class FakeStore {
     TreeMap<Long, FloatDigest> map = this.digests.computeIfAbsent(key, k -> new TreeMap<>());
     map.put(startTimestamp, digest);
   }
-
 }

@@ -19,6 +19,7 @@
 
 package org.apache.iotdb.db.index.storage;
 
+import java.util.Map;
 import java.util.TreeMap;
 import org.apache.iotdb.tsfile.utils.Pair;
 
@@ -26,7 +27,7 @@ public class FixWindowPackage {
 
   protected String key = null;
   private Pair<Long, Long> timeWindow;
-  private TreeMap<Long, Object> treeMap;
+  private Map<Long, Object> treeMap;
 
   public FixWindowPackage(String key, Pair<Long, Long> timeWindow) {
     this.key = key;
@@ -66,7 +67,7 @@ public class FixWindowPackage {
     return treeMap.size();
   }
 
-  public TreeMap<Long, Object> getData() {
+  public Map<Long, Object> getData() {
     return treeMap;
   }
 

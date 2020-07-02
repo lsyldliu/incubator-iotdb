@@ -35,7 +35,6 @@ import org.apache.iotdb.db.exception.StorageEngineException;
 import org.apache.iotdb.db.exception.index.IndexException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
-import org.apache.iotdb.db.index.storage.Config;
 import org.apache.iotdb.db.index.storage.FakeStore;
 import org.apache.iotdb.db.index.utils.DigestUtil;
 import org.apache.iotdb.db.index.utils.ForestRootStack;
@@ -74,8 +73,6 @@ public class PisaIndex<T extends FloatDigest> {
   protected FakeStore writer = new FakeStore();
   private String rowkey;
 
-  private Pair<Long, Long> currentWindow = new Pair<>(0L, Config.timeWindow);
-
   private static final String INDEX_FILE_PATH =
       IoTDBDescriptor.getInstance().getConfig().getDataDirs()[0] + File.separator
           + "index" + File.separator + "test.tsfile";
@@ -85,14 +82,14 @@ public class PisaIndex<T extends FloatDigest> {
   }
 
   public boolean build(Path path) throws IndexException {
-    // TODO initial
+    // initial
     this.rowkey = path.toString();
 
     T lastDigest = getLastDigest();
 
     if (null == lastDigest) {
       maxSerialNo = 0;
-      rootNodes = new ForestRootStack<T>();
+      rootNodes = new ForestRootStack<>();
     } else {
       maxSerialNo = lastDigest.getSerial();
       rootNodes = getRoots(lastDigest);
@@ -110,8 +107,7 @@ public class PisaIndex<T extends FloatDigest> {
       Set<String> allSensors = new HashSet<>();
       allSensors.add(path.getMeasurement());
       SeriesAggregateReader seriesReader = new SeriesAggregateReader(path, allSensors, dataType,
-          context,
-          queryDataSource, null, null, null);
+          context, queryDataSource, null, null, null);
 
       while (seriesReader.hasNextChunk()) {
         if (seriesReader.canUseCurrentChunkStatistics()) {
@@ -282,7 +278,6 @@ public class PisaIndex<T extends FloatDigest> {
   private T getLastDigest() {
     T lastDigest = null;
     try {
-      System.out.println("rowkey:" + rowkey);
       lastDigest = (T) reader.getLatestDigest(rowkey);
     } catch (Exception e) {
       e.printStackTrace();

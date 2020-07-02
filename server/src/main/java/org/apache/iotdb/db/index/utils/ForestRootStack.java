@@ -19,20 +19,21 @@
 
 package org.apache.iotdb.db.index.utils;
 
-import java.util.Stack;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import org.apache.iotdb.tsfile.utils.Pair;
 
 public class ForestRootStack<T> {
 
-  private Stack<T> rootNodes = null;
+  private Deque<T> rootNodes = null;
 
   public ForestRootStack() {
-    this.rootNodes = new Stack<T>();
+    this.rootNodes = new ArrayDeque<>();
   }
 
   public void push(T aRootNode) {
     if (rootNodes == null) {
-      rootNodes = new Stack<T>();
+      rootNodes = new ArrayDeque<>();
     }
 
     rootNodes.push(aRootNode);
@@ -60,7 +61,4 @@ public class ForestRootStack<T> {
     return this.rootNodes.size();
   }
 
-  public T get(int index) {
-    return this.rootNodes.get(index);
-  }
 }
