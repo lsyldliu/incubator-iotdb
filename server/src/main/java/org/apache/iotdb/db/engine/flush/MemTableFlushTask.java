@@ -24,6 +24,7 @@ import static org.apache.iotdb.tsfile.common.constant.TsFileConstant.VM_SUFFIX;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -175,8 +176,8 @@ public class MemTableFlushTask {
       reader.close();
     }
 
-    if (flushLogFile != null) {
-      flushLogFile.delete();
+    if (flushLogFile != null && flushLogFile.exists()) {
+      Files.delete(flushLogFile.toPath());
     }
 
     if (vmLogger != null) {
@@ -333,8 +334,8 @@ public class MemTableFlushTask {
           if (ioMessage instanceof StartFlushGroupIOTask) {
             currWriter.startChunkGroup(((StartFlushGroupIOTask) ioMessage).deviceId);
           } else if (ioMessage instanceof MergeVmIoTask) {
-            if (flushLogFile != null) {
-              flushLogFile.delete();
+            if (flushLogFile != null && flushLogFile.exists()) {
+              Files.delete(flushLogFile.toPath());
             }
             RestorableTsFileIOWriter mergeWriter = ((MergeVmIoTask) ioMessage).mergeWriter;
             VmMergeTask vmMergeTask = new VmMergeTask(mergeWriter, vmWriters,

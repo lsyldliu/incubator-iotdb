@@ -26,6 +26,7 @@ import static org.apache.iotdb.tsfile.common.constant.TsFileConstant.VM_SUFFIX;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -51,6 +52,7 @@ import org.apache.iotdb.db.engine.flush.VmLogAnalyzer;
 import org.apache.iotdb.db.engine.flush.VmLogger;
 import org.apache.iotdb.db.engine.flush.VmMergeTask;
 import org.apache.iotdb.db.engine.memtable.IMemTable;
+import org.apache.iotdb.db.engine.memtable.IWritableMemChunk;
 import org.apache.iotdb.db.engine.modification.Deletion;
 import org.apache.iotdb.db.engine.modification.Modification;
 import org.apache.iotdb.db.engine.modification.ModificationFile;
@@ -259,9 +261,8 @@ public class TsFileProcessor {
 
   /**
    * Delete data which belongs to the timeseries `deviceId.measurementId` and the timestamp of which
-   * <= 'timestamp' in the deletion. <br/>
-   * <p>
-   * Delete data in both working MemTable and flushing MemTables.
+   * <= 'timestamp' in the deletion. <br/> <p> Delete data in both working MemTable and flushing
+   * MemTables.
    */
   public void deleteDataInMemory(Deletion deletion) {
     flushQueryLock.writeLock().lock();
@@ -597,7 +598,7 @@ public class TsFileProcessor {
       ChunkMetadataCache.getInstance().remove(seqFile);
       FileReaderManager.getInstance().closeFileAndRemoveReader(seqFile.getPath());
       seqFile.setDeleted(true);
-      seqFile.getFile().delete();
+      Files.delete(seqFile.getFile().toPath());
     } catch (Exception e) {
       logger.error(e.getMessage(), e);
     } finally {
@@ -632,13 +633,13 @@ public class TsFileProcessor {
         }
         vmWriters.clear();
         vmTsFileResources.clear();
-        logFile.delete();
+        Files.delete(logFile.toPath());
       } else {
         File[] tmpFiles = FSFactoryProducer.getFSFactory()
             .listFilesBySuffix(writer.getFile().getParent(), PATH_UPGRADE);
         if (tmpFiles.length > 0) {
           for (File file : tmpFiles) {
-            file.delete();
+            Files.delete(file.toPath());
           }
         }
       }
@@ -682,34 +683,38 @@ public class TsFileProcessor {
           }
           // all flush to target file
           Map<Path, MeasurementSchema> pathMeasurementSchemaMap = new HashMap<>();
-          for (String device : memTableToFlush.getMemTableMap().keySet()) {
-            for (String measurement : memTableToFlush.getMemTableMap().get(device).keySet()) {
+          for (Entry<String, Map<String, IWritableMemChunk>> memTableEntry : memTableToFlush
+              .getMemTableMap().entrySet()) {
+            String device = memTableEntry.getKey();
+            for (Entry<String, IWritableMemChunk> entry : memTableEntry.getValue().entrySet()) {
+              String measurement = entry.getKey();
               pathMeasurementSchemaMap.putIfAbsent(new Path(device, measurement),
-                  memTableToFlush.getMemTableMap().get(device).get(measurement).getSchema());
+                  entry.getValue().getSchema());
             }
           }
           for (RestorableTsFileIOWriter vmWriter : vmWriters) {
             Map<String, Map<String, List<ChunkMetadata>>> schemaMap = vmWriter
                 .getMetadatasForQuery();
-            for (String device : schemaMap.keySet()) {
-              for (String measurement : schemaMap.get(device).keySet()) {
-                List<ChunkMetadata> chunkMetadataList = schemaMap.get(device).get(measurement);
+            for (Entry<String, Map<String, List<ChunkMetadata>>> schemaMapEntry : schemaMap
+                .entrySet()) {
+              String device = schemaMapEntry.getKey();
+              for (Entry<String, List<ChunkMetadata>> entry : schemaMapEntry.getValue()
+                  .entrySet()) {
+                String measurement = entry.getKey();
                 pathMeasurementSchemaMap.putIfAbsent(new Path(device, measurement),
-                    new MeasurementSchema(measurement, chunkMetadataList.get(0).getDataType()));
+                    new MeasurementSchema(measurement, entry.getValue().get(0).getDataType()));
               }
             }
           }
           if ((vmPointNum + memTableToFlush.getTotalPointsNum()) / pathMeasurementSchemaMap.size()
-              > config.getMergeChunkPointNumberThreshold() 
+              > config.getMergeChunkPointNumberThreshold()
               || flushVmTimes >= config.getMaxMergeChunkNumInTsFile()) {
             logger.info("[Flush] merge {} vms to TsFile", vmTsFileResources.size() + 1);
             isVm = false;
             isFull = false;
             flushVmTimes = 0;
             flushTask = new MemTableFlushTask(memTableToFlush, writer, vmTsFileResources, vmWriters,
-                false, false,
-                sequence,
-                storageGroupName);
+                false, false, sequence, storageGroupName);
           } else {
             // merge vm files
             if (config.getMaxVmNum() <= vmTsFileResources.size()) {
@@ -717,9 +722,7 @@ public class TsFileProcessor {
               isVm = true;
               isFull = true;
               flushTask = new MemTableFlushTask(memTableToFlush, writer, vmTsFileResources,
-                  vmWriters, true, true,
-                  sequence,
-                  storageGroupName);
+                  vmWriters, true, true, sequence, storageGroupName);
             } else {
               logger.info("[Flush] flush a vm");
               isVm = true;
@@ -728,16 +731,12 @@ public class TsFileProcessor {
               vmTsFileResources.add(new TsFileResource(newVmFile));
               vmWriters.add(new RestorableTsFileIOWriter(newVmFile));
               flushTask = new MemTableFlushTask(memTableToFlush, writer, vmTsFileResources,
-                  vmWriters, true, false,
-                  sequence,
-                  storageGroupName);
+                  vmWriters, true, false, sequence, storageGroupName);
             }
           }
         } else {
           flushTask = new MemTableFlushTask(memTableToFlush, writer, vmTsFileResources, vmWriters,
-              false, false,
-              sequence,
-              storageGroupName);
+              false, false, sequence, storageGroupName);
         }
         writer.mark();
         for (RestorableTsFileIOWriter vmWriter : vmWriters) {
@@ -768,7 +767,7 @@ public class TsFileProcessor {
           File logFile = FSFactoryProducer.getFSFactory()
               .getFile(tsFileResource.getFile().getParent(),
                   tsFileResource.getFile().getName() + VM_LOG_NAME);
-          logFile.delete();
+          Files.delete(logFile.toPath());
         }
       } catch (Exception e) {
         logger.error("{}: {} meet error when flushing a memtable, change system mode to read-only",
@@ -822,7 +821,7 @@ public class TsFileProcessor {
           File logFile = FSFactoryProducer.getFSFactory()
               .getFile(tsFileResource.getFile().getParent(),
                   tsFileResource.getFile().getName() + VM_LOG_NAME);
-          logFile.delete();
+          Files.delete(logFile.toPath());
         }
 
         writer.mark();

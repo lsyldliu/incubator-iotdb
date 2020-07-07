@@ -22,7 +22,6 @@ package org.apache.iotdb.db.engine.flush;
 import static org.apache.iotdb.db.utils.MergeUtils.writeTimeValuePair;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,12 +92,14 @@ public class VmMergeTask {
       }
     }
     if (!sequence) {
-      for (String deviceId : deviceMeasurementMap.keySet()) {
+      for (Entry<String, Map<String, MeasurementSchema>> deviceMeasurementEntry : deviceMeasurementMap
+          .entrySet()) {
+        String deviceId = deviceMeasurementEntry.getKey();
         writer.startChunkGroup(deviceId);
         long maxVersion = Long.MIN_VALUE;
-        for (String measurementId : deviceMeasurementMap.get(deviceId).keySet()) {
-          MeasurementSchema measurementSchema = deviceMeasurementMap.get(deviceId)
-              .get(measurementId);
+        for (Entry<String, MeasurementSchema> entry : deviceMeasurementEntry.getValue()
+            .entrySet()) {
+          String measurementId = entry.getKey();
           Map<Long, TimeValuePair> timeValuePairMap = new TreeMap<>();
           for (RestorableTsFileIOWriter vmWriter : vmWriters) {
             TsFileSequenceReader reader = tsFileSequenceReaderMap
@@ -117,9 +118,8 @@ public class VmMergeTask {
             if (reader == null) {
               continue;
             }
-            List<ChunkMetadata> chunkMetadataList = vmWriter
-                .getVisibleMetadataList(deviceId, measurementId,
-                    measurementSchema.getType());
+            List<ChunkMetadata> chunkMetadataList = vmWriter.getVisibleMetadataList(deviceId,
+                measurementId, entry.getValue().getType());
             for (ChunkMetadata chunkMetadata : chunkMetadataList) {
               maxVersion = Math.max(chunkMetadata.getVersion(), maxVersion);
               IChunkReader chunkReader = new ChunkReaderByTimestamp(
@@ -134,8 +134,7 @@ public class VmMergeTask {
               }
             }
           }
-          IChunkWriter chunkWriter = new ChunkWriterImpl(
-              deviceMeasurementMap.get(deviceId).get(measurementId));
+          IChunkWriter chunkWriter = new ChunkWriterImpl(entry.getValue());
           for (TimeValuePair timeValuePair : timeValuePairMap.values()) {
             writeTimeValuePair(timeValuePair, chunkWriter);
           }
@@ -148,9 +147,13 @@ public class VmMergeTask {
         }
       }
     } else {
-      for (String deviceId : deviceMeasurementMap.keySet()) {
+      for (Entry<String, Map<String, MeasurementSchema>> deviceMeasurementEntry : deviceMeasurementMap
+          .entrySet()) {
+        String deviceId = deviceMeasurementEntry.getKey();
         writer.startChunkGroup(deviceId);
-        for (String measurementId : deviceMeasurementMap.get(deviceId).keySet()) {
+        for (Entry<String, MeasurementSchema> entry : deviceMeasurementEntry.getValue()
+            .entrySet()) {
+          String measurementId = entry.getKey();
           ChunkMetadata newChunkMetadata = null;
           Chunk newChunk = null;
           for (RestorableTsFileIOWriter vmWriter : vmWriters) {
