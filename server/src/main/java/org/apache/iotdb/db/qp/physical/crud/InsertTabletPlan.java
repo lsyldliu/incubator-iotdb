@@ -482,4 +482,26 @@ public class InsertTabletPlan extends InsertPlan {
     columns[index] = null;
   }
 
+  @Override
+  public Object clone() {
+    String deviceIdClone = deviceId;
+    String[] measurementsClone = new String[this.measurements.length];
+    System.arraycopy(this.measurements, 0, measurementsClone, 0, measurementsClone.length);
+    TSDataType[] typesClone = new TSDataType[this.dataTypes.length];
+    System.arraycopy(this.dataTypes, 0, typesClone, 0, typesClone.length);
+    InsertTabletPlan ret = new InsertTabletPlan(deviceIdClone, measurementsClone);
+
+    ret.setDataTypes(typesClone);
+
+    long[] timesClone = new long[times.length];
+    System.arraycopy(this.times, 0, timesClone, 0, times.length);
+    ret.setTimes(timesClone);
+    Object[] columnsClone = new Object[columns.length];
+    System.arraycopy(this.columns, 0, columnsClone, 0, columns.length);
+    ret.setColumns(columnsClone);
+
+    ret.setRowCount(rowCount);
+    return ret;
+  }
+
 }

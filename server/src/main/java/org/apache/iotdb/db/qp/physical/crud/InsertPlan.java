@@ -95,4 +95,6 @@ public abstract class InsertPlan extends PhysicalPlan {
     dataTypes[index] = null;
   }
 
+  @Override
+  public abstract Object clone();
 }
